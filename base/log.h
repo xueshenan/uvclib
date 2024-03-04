@@ -26,7 +26,7 @@
 #define LogWarn() LogWarnDetailed(FILENAME, __LINE__)
 #define LogError() LogErrDetailed(FILENAME, __LINE__)
 
-namespace mid {
+namespace base {
 
 enum class Color {
     Red,
@@ -124,8 +124,8 @@ public:
 #endif
     }
 
-    LogDetailed(const mid::LogDetailed &) = delete;
-    void operator=(const mid::LogDetailed &) = delete;
+    LogDetailed(const base::LogDetailed &) = delete;
+    void operator=(const base::LogDetailed &) = delete;
 protected:
     log::Level _log_level = log::Level::Debug;
 private:
@@ -162,4 +162,4 @@ public:
     }
 };
 
-}  // namespace mid
+}  // namespace base
