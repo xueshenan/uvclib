@@ -4,6 +4,6 @@
 
 int main(int argc, const char *argv[]) {
     uvc::V4l2Device device;
-    std::cout << device.enum_devices() << std::endl;
+    device.init_device_list();
     return 0;
 }

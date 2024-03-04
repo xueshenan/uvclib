@@ -44,6 +44,34 @@ int xioctl(int fd, int IOCTL_X, void *arg) {
     return (ret);
 }
 
+void V4l2Device::init_device_list() {
+    /* Create a udev object */
+    _udev = udev_new();
+    /*start udev device monitoring*/
+    /* Set up a monitor to monitor v4l2 devices */
+    if (_udev != NULL) {
+        _udev_monitor = udev_monitor_new_from_netlink(_udev, "udev");
+        udev_monitor_filter_add_match_subsystem_devtype(_udev_monitor, "video4linux", NULL);
+        udev_monitor_enable_receiving(_udev_monitor);
+        /* Get the file descriptor (fd) for the monitor */
+        _udev_fd = udev_monitor_get_fd(_udev_monitor);
+
+        enum_devices();
+    } else {
+        base::LogError() << "Create new udev failed";
+    }
+}
+
+V4L2DeviceSysData V4l2Device::get_device_sys_data(int index) {
+    V4L2DeviceSysData sys_data;
+    if (index < 0 || index >= _dev_sys_datas.size()) {
+        base::LogError() << "Invalid index " << index;
+        return sys_data;
+    }
+
+    return _dev_sys_datas[index];
+}
+
 int V4l2Device::enum_devices() {
     _dev_sys_datas.clear();
     /* Create a list of the devices in the 'v4l2' subsystem. */
