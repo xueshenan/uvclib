@@ -35,6 +35,10 @@ public:
     * get the device sys data for index
     */
     V4L2DeviceSysData get_device_sys_data(int index);
+    /*
+    * free v4l2 devices list
+    */
+    void free_device_list();
 private:
     /*
     * enumerate available v4l2 devices and creates list 

@@ -72,6 +72,14 @@ V4L2DeviceSysData V4l2Device::get_device_sys_data(int index) {
     return _dev_sys_datas[index];
 }
 
+void V4l2Device::free_device_list() {
+    _dev_sys_datas.clear();
+
+    if (_udev != NULL) {
+        udev_unref(_udev);
+    }
+}
+
 int V4l2Device::enum_devices() {
     _dev_sys_datas.clear();
     /* Create a list of the devices in the 'v4l2' subsystem. */
