@@ -100,7 +100,7 @@ int V4l2Device::enum_devices() {
         }
 
         if (!(caps & V4L2_CAP_VIDEO_CAPTURE)) {
-            base::LogWarn() << "Device " << v4l2_device << "not support video capture";
+            base::LogWarn() << "Device " << v4l2_device << " not support video capture";
             continue;
         }
 
