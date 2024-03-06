@@ -31,4 +31,15 @@ int v4l2core_start_stream(V4L2Context *context);
 */
 int v4l2core_stop_stream(V4L2Context *context);
 
+/*
+ * Set device video stream format
+ * args:
+ *   context - pointer to v4l2 context
+ *   width - requested video frame width
+ *   height - requested video frame height
+ *   pixelformat - requested v4l2 pixelformat
+ *
+ * returns: error code ( E_OK)
+ */
+int set_video_stream_format(V4L2Context *context, int32_t width, int32_t height, int pixelformat);
 }  // namespace uvc

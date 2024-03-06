@@ -3,6 +3,7 @@
 #include <thread>
 
 #include "uvc/v4l2_core.h"
+#include "uvc/v4l2_define.h"
 #include "uvc/v4l2_device.h"
 
 int main(int argc, const char *argv[]) {
@@ -15,6 +16,7 @@ int main(int argc, const char *argv[]) {
         auto context = uvc::v4l2core_init_dev(device_sys_data.device.c_str());
 
         auto ret = v4l2core_stop_stream(context);
+        set_video_stream_format(context, 640, 480, V4L2_PIX_FMT_MJPEG);
         ret = v4l2core_start_stream(context);
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));

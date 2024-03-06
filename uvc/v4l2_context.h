@@ -43,6 +43,11 @@ namespace uvc {
 #define STRM_REQ_STOP (1)
 #define STRM_OK (2)
 
+/*
+ * buffer number (for driver mmap ops)
+ */
+#define NB_BUFFER 4
+
 static int frame_queue_size = 1; /*just one frame in queue (enough for a single thread)*/
 
 /*
@@ -86,6 +91,32 @@ struct V4L2StreamFormat {
     std::vector<V4l2StreamCapability> list_stream_cap;  //list of stream capabilities for format
 };
 
+/*
+ * frame buffer struct
+ */
+struct V4L2FrameBuff {
+    int index;   //buffer index
+    int status;  //frame status {FRAME_DECODING; FRAME_DONE; FRAME_READY}
+
+    int width;   //frame width (in pixels)
+    int height;  //frame height (in pixels)
+
+    int isKeyframe;  // current buffer contains a keyframe (h264 IDR)
+
+    size_t raw_frame_size;       // raw frame size (bytes)
+    size_t raw_frame_max_size;   //maximum size for raw frame (bytes)
+    size_t h264_frame_size;      // h264 frame size (bytes)
+    size_t h264_frame_max_size;  //size limit for h264 frame (bytes)
+    size_t tmp_buffer_max_size;  //maximum size for temp buffer (bytes)
+
+    uint64_t timestamp;  // captured frame timestamp
+
+    uint8_t *raw_frame;   // pointer to raw frame
+    uint8_t *yuv_frame;   // pointer to decoded yuv frame
+    uint8_t *h264_frame;  // pointer to regular or demultiplexed h264 frame
+    uint8_t *tmp_buffer;  //temporary buffer used in decoding
+};
+
 struct V4L2Context {
     int fd;
     std::string videodevice;  // video device string (e.g. "/dev/video0")
@@ -100,6 +131,8 @@ struct V4L2Context {
     struct v4l2_streamparm streamparm;     // v4l2 stream parameters struct
     struct v4l2_event_subscription evsub;  // v4l2 event subscription struct
 
+    int requested_fmt;  //requested format (may differ from format.fmt.pix.pixelformat)
+
     uint8_t streaming;  // flag device stream : STRM_STOP ; STRM_REQ_STOP; STRM_OK
     int has_focus_control_id;  //it's set to control id if a focus control is available (enables software autofocus)
     int has_pantilt_control_id;  //it's set to 1 if a pan/tilt control is available
@@ -110,7 +143,12 @@ struct V4L2Context {
 
     double real_fps;  //real fps (calculated from number of captured frames)
 
-    int frame_queue_size;  //size of frame queue (in frames)
+    void *mem[NB_BUFFER];             // memory buffers for mmap driver frames
+    uint32_t buff_length[NB_BUFFER];  // memory buffers length as set by VIDIOC_QUERYBUF
+    uint32_t buff_offset[NB_BUFFER];  // memory buffers offset as set by VIDIOC_QUERYBUF
+
+    V4L2FrameBuff *frame_queue;  //frame queue
+    int frame_queue_size;        //size of frame queue (in frames)
 
     uint8_t h264_unit_id;  // uvc h264 unit id, if <= 0 then uvc h264 is not supported
     uint8_t
