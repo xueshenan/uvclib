@@ -165,4 +165,72 @@ V4L2Context *v4l2core_init_dev(const char *device) {
     return context;
 }
 
+/*
+ * Start video stream
+ * args:
+ *   vd - pointer to V4L2Context
+ *
+ * returns: VIDIOC_STREAMON ioctl result (E_OK or E_STREAMON_ERR)
+*/
+int v4l2core_start_stream(V4L2Context *context) {
+    if (context->streaming == STRM_OK) {
+        base::LogWarn() << "Stream already started) stream_status = STRM_OK\n";
+        return E_OK;
+    }
+
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    int ret = E_OK;
+    switch (context->cap_meth) {
+        case IO_READ:
+            //do nothing
+            break;
+        case IO_MMAP:
+        default:
+            ret = xioctl(context->fd, VIDIOC_STREAMON, &type);
+            if (ret < 0) {
+                base::LogError() << "(VIDIOC_STREAMON) Unable to start stream: " << strerror(errno);
+                return E_STREAMON_ERR;
+            }
+            break;
+    }
+
+    context->streaming = STRM_OK;
+
+    base::LogDebug() << "(VIDIOC_STREAMON) stream_status = STRM_OK";
+
+    return ret;
+}
+
+/*
+ * Stops the video stream
+ * args:
+ *   vd - pointer to V4L2Context
+ *
+ * returns: VIDIOC_STREAMON ioctl result (E_OK)
+*/
+int v4l2core_stop_stream(V4L2Context *context) {
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    int ret = E_OK;
+    switch (context->cap_meth) {
+        case IO_READ:
+        case IO_MMAP:
+        default:
+            ret = xioctl(context->fd, VIDIOC_STREAMOFF, &type);
+            if (ret < 0) {
+                if (errno == 9) { /* stream allready stoped*/
+                    context->streaming = STRM_STOP;
+                }
+                base::LogError() << "(VIDIOC_STREAMOFF) Unable to stop stream: " << strerror(errno);
+                return E_STREAMOFF_ERR;
+            }
+            break;
+    }
+
+    context->streaming = STRM_STOP;
+
+    base::LogDebug() << "(VIDIOC_STREAMOFF) stream_status = STRM_STOP";
+
+    return ret;
+}
+
 }  // namespace uvc

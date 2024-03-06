@@ -36,6 +36,13 @@ namespace uvc {
 #define IO_MMAP 1
 #define IO_READ 2
 
+/*
+ * stream status codes
+ */
+#define STRM_STOP (0)
+#define STRM_REQ_STOP (1)
+#define STRM_OK (2)
+
 static int frame_queue_size = 1; /*just one frame in queue (enough for a single thread)*/
 
 /*
@@ -93,6 +100,7 @@ struct V4L2Context {
     struct v4l2_streamparm streamparm;     // v4l2 stream parameters struct
     struct v4l2_event_subscription evsub;  // v4l2 event subscription struct
 
+    uint8_t streaming;  // flag device stream : STRM_STOP ; STRM_REQ_STOP; STRM_OK
     int has_focus_control_id;  //it's set to control id if a focus control is available (enables software autofocus)
     int has_pantilt_control_id;  //it's set to 1 if a pan/tilt control is available
     uint8_t pantilt_unit_id;     //logitech peripheral V3 unit id (if any)
