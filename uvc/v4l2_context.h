@@ -55,14 +55,17 @@ struct V4L2ControlData {
     char **menu_entry; /*gettext translated menu entry name*/
 };
 
+struct V4L2Rational {
+    int32_t numerator;
+    int32_t denominator;
+};
 /*
  * v4l2 stream capability data
  */
-struct V4l2StreamCap {
-    int width;            //width
-    int height;           //height
-    int framerate_num;    //list of numerator values - should be 1 in almost all cases
-    int framerate_denom;  //list of denominator values - gives fps
+struct V4l2StreamCapability {
+    int32_t width;                         //width
+    int32_t height;                        //height
+    std::vector<V4L2Rational> framerates;  //list of framerates, should be 1 in almost all cases
 };
 
 /*
@@ -70,19 +73,18 @@ struct V4l2StreamCap {
  */
 struct V4L2StreamFormat {
     uint8_t dec_support;   //decoder support (1-supported; 0-not supported)
-    int format;            //v4l2 pixel format
+    int pixel_format;      //v4l2 pixel format
     char fourcc[5];        //corresponding fourcc (mode)
     char description[32];  //format description
-    int numb_res;  //available number of resolutions for format (v4l2_stream_cap_t list size)
-    std::vector<V4l2StreamCap *> list_stream_cap;  //list of stream capabilities for format
+    std::vector<V4l2StreamCapability> list_stream_cap;  //list of stream capabilities for format
 };
 
 struct V4L2Context {
     int fd;
     std::string videodevice;  // video device string (e.g. "/dev/video0")
 
-    int cap_meth;                                    // capture method: IO_READ or IO_MMAP
-    std::vector<V4L2StreamFormat *> stream_formats;  //list of available stream formats
+    int cap_meth;                                  // capture method: IO_READ or IO_MMAP
+    std::vector<V4L2StreamFormat> stream_formats;  //list of available stream formats
 
     struct v4l2_capability cap;            // v4l2 capability struct
     struct v4l2_format format;             // v4l2 format struct

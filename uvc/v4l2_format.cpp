@@ -68,6 +68,144 @@ uint8_t can_decode_format(uint32_t pixelformat) {
 }
 
 /*
+ * enumerate frame framerate
+ * args:
+ *   context - pointer to V4L2Context
+ *   pixfmt - v4l2 pixel format that we want to list framerate for
+ *   stream_capability - stream capability that we want to list framerate for
+ *
+ * returns 0 if enumeration succeded or errno otherwise
+ */
+static int enum_frame_framerate(V4L2Context *context, uint32_t pixfmt,
+                                V4l2StreamCapability &stream_capability) {
+    stream_capability.framerates.clear();
+
+    struct v4l2_frmivalenum frame_ivalue_enum;
+    memset(&frame_ivalue_enum, 0, sizeof(frame_ivalue_enum));
+    frame_ivalue_enum.index = 0;
+    frame_ivalue_enum.pixel_format = pixfmt;
+    frame_ivalue_enum.width = stream_capability.width;
+    frame_ivalue_enum.height = stream_capability.height;
+
+    base::LogDebug() << "\tTime interval between frame: ";
+    int ret = 0;
+    while ((ret = xioctl(context->fd, VIDIOC_ENUM_FRAMEINTERVALS, &frame_ivalue_enum)) == 0) {
+        frame_ivalue_enum.index++;
+        if (frame_ivalue_enum.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+            base::LogDebug() << "\t\t" << frame_ivalue_enum.discrete.numerator << "/"
+                             << frame_ivalue_enum.discrete.denominator;
+            V4L2Rational framerate;
+            framerate.numerator = frame_ivalue_enum.discrete.numerator;
+            framerate.denominator = frame_ivalue_enum.discrete.denominator;
+            stream_capability.framerates.push_back(framerate);
+        } else if (frame_ivalue_enum.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
+            base::LogDebug() << "\t\t{min { " << frame_ivalue_enum.stepwise.min.numerator << "/"
+                             << frame_ivalue_enum.stepwise.min.numerator << " } .. max { "
+                             << frame_ivalue_enum.stepwise.max.denominator << "/"
+                             << frame_ivalue_enum.stepwise.max.denominator << " }";
+            break;
+        } else if (frame_ivalue_enum.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
+            base::LogDebug() << "\t\t{min { " << frame_ivalue_enum.stepwise.min.numerator << "/"
+                             << frame_ivalue_enum.stepwise.min.denominator << "} .. max { "
+                             << frame_ivalue_enum.stepwise.max.numerator << "/"
+                             << frame_ivalue_enum.stepwise.max.denominator << " "
+                             << frame_ivalue_enum.stepwise.step.numerator << "/"
+                             << frame_ivalue_enum.stepwise.step.denominator << "}";
+            break;
+        }
+    }
+
+    if (ret != 0 && errno != EINVAL) {
+        base::LogError() << "(VIDIOC_ENUM_FRAMEINTERVALS) Error enumerating frame intervals";
+        return errno;
+    }
+    return 0;
+}
+
+/*
+ * enumerate frame sizes (width and height)
+ * args:
+ *   context - pointer to V4L2Context
+ *   pixfmt - v4l2 pixel format that we want to list frame sizes for
+ *   format_index - current index of format list
+ *
+ * returns 0 if enumeration succeded or errno otherwise
+ */
+static int enum_frame_sizes(V4L2Context *context, uint32_t pixfmt, int format_index) {
+    int frame_size_index = 0; /*index for supported sizes*/
+    context->stream_formats[format_index].list_stream_cap.clear();
+
+    struct v4l2_frmsizeenum frame_size_enum;
+    memset(&frame_size_enum, 0, sizeof(frame_size_enum));
+    frame_size_enum.pixel_format = pixfmt;
+
+    int ret = 0;
+    while ((ret = xioctl(context->fd, VIDIOC_ENUM_FRAMESIZES, &frame_size_enum)) == 0) {
+        frame_size_enum.index++;
+        if (frame_size_enum.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
+            base::LogDebug() << "{ discrete: width = " << frame_size_enum.discrete.width
+                             << ", height = " << frame_size_enum.discrete.height << "}";
+
+            V4l2StreamCapability stream_capability;
+
+            stream_capability.width = frame_size_enum.discrete.width;
+            stream_capability.height = frame_size_enum.discrete.height;
+
+            ret = enum_frame_framerate(context, pixfmt, stream_capability);
+            context->stream_formats[format_index].list_stream_cap.emplace_back(stream_capability);
+            if (ret != 0) {
+                base::LogError() << "Unable to enumerate framerate " << strerror(ret);
+            }
+        } else if (frame_size_enum.type == V4L2_FRMSIZE_TYPE_CONTINUOUS ||
+                   frame_size_enum.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
+            if (frame_size_enum.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
+                base::LogDebug() << "{ continuous: min { width = "
+                                 << frame_size_enum.stepwise.min_width
+                                 << ", height = " << frame_size_enum.stepwise.min_height << "}"
+                                 << " .. max { width = " << frame_size_enum.stepwise.max_width
+                                 << ", height = " << frame_size_enum.stepwise.max_height << " } }";
+            } else {
+                base::LogDebug() << "{ stepwise: min { width = "
+                                 << frame_size_enum.stepwise.min_width
+                                 << ", height = " << frame_size_enum.stepwise.min_height << " } .. "
+                                 << "max { width = " << frame_size_enum.stepwise.max_width
+                                 << ", height = " << frame_size_enum.stepwise.max_height << "} .. "
+                                 << "stepsize { width = " << frame_size_enum.stepwise.step_width
+                                 << ", height = " << frame_size_enum.stepwise.step_height << " } }";
+            }
+
+            V4l2StreamCapability stream_capability;
+
+            stream_capability.width = frame_size_enum.stepwise.min_width;
+            stream_capability.height = frame_size_enum.stepwise.min_height;
+
+            ret = enum_frame_framerate(context, pixfmt, stream_capability);
+            context->stream_formats[format_index].list_stream_cap.emplace_back(stream_capability);
+            if (ret != 0) {
+                base::LogError() << "Unable to enumerate framerate " << strerror(ret);
+            }
+
+            stream_capability.width = frame_size_enum.stepwise.max_width;
+            stream_capability.height = frame_size_enum.stepwise.max_height;
+
+            ret = enum_frame_framerate(context, pixfmt, stream_capability);
+
+            if (ret != 0) {
+                base::LogError() << "Unable to enumerate frame sizes " << strerror(ret);
+            }
+        } else {
+            base::LogError() << "V4L2_CORE: fsize.type not supported: " << frame_size_enum.type;
+        }
+    }
+
+    if (ret != 0 && errno != EINVAL) {
+        base::LogError() << "(VIDIOC_ENUM_FRAMESIZES) - Error enumerating frame sizes";
+        return errno;
+    }
+    return 0;
+}
+
+/*
  * enumerate frame formats (pixelformats, resolutions and fps)
  * and creates list in vd->list_stream_formats
  * args:
@@ -76,53 +214,46 @@ uint8_t can_decode_format(uint32_t pixelformat) {
  * returns: 0 (E_OK) if enumeration succeded or error otherwise
  */
 int enum_frame_formats(V4L2Context *context) {
-    int ret = E_OK;
-
-    int fmtind = 0;
     int valid_formats = 0; /*number of valid formats found (with valid frame sizes)*/
-    struct v4l2_fmtdesc fmt;
-    memset(&fmt, 0, sizeof(fmt));
-    fmt.index = 0;
-    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    while ((ret = xioctl(context->fd, VIDIOC_ENUM_FMT, &fmt)) == 0) {
-        V4L2StreamFormat *stream_format = (V4L2StreamFormat *)calloc(1, sizeof(V4L2StreamFormat));
-        if (stream_format == NULL) {
-            base::LogError() << "FATAL memory allocation failure (enum_frame_formats): ",
-                strerror(errno);
-            exit(-1);
-        }
+    struct v4l2_fmtdesc format_description;
+    memset(&format_description, 0, sizeof(format_description));
+    format_description.index = 0;
+    format_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-        uint8_t dec_support = can_decode_format(fmt.pixelformat);
+    int ret = 0;
+    while ((ret = xioctl(context->fd, VIDIOC_ENUM_FMT, &format_description)) == 0) {
+        V4L2StreamFormat new_stream_format;
+        uint8_t dec_support = can_decode_format(format_description.pixelformat);
+        uint32_t pix_format = format_description.pixelformat;
 
-        uint32_t pix_format = fmt.pixelformat;
-
-        fmt.index++;
-        if ((fmt.pixelformat & (1 << 31)) != 0) {
+        format_description.index++;
+        if ((format_description.pixelformat & (1 << 31)) != 0) {
             pix_format &= ~(1 << 31);  //need to fix fourcc string
-            base::LogDebug() << " valid pixel format " << fmt.description;
+            base::LogDebug() << " valid pixel format " << format_description.description;
         } else {
-            base::LogDebug() << " valid pixel format " << fmt.description;
+            base::LogDebug() << " valid pixel format " << format_description.description;
         }
 
         if (!dec_support) {
-            base::LogWarn() << "    - FORMAT NOT SUPPORTED BY DECODER -";
+            base::LogWarn() << "- FORMAT NOT SUPPORTED BY DECODER -";
         }
 
-        stream_format->dec_support = dec_support;
-        stream_format->format = fmt.pixelformat;
-        context->stream_formats.push_back(stream_format);
-        if ((fmt.pixelformat & (1 << 31)) != 0) {  //be format flag
-            pix_format &= ~(1 << 31);              //need to fix fourcc string
+        new_stream_format.dec_support = dec_support;
+        new_stream_format.pixel_format = format_description.pixelformat;
+        if ((format_description.pixelformat & (1 << 31)) != 0) {  //be format flag
+            pix_format &= ~(1 << 31);                             //need to fix fourcc string
         }
-        snprintf(stream_format->fourcc, 5, "%c%c%c%c", pix_format & 0xFF, (pix_format >> 8) & 0xFF,
-                 (pix_format >> 16) & 0xFF, (pix_format >> 24) & 0xFF);
-        strncpy(stream_format->description, (char *)fmt.description, 31);
-        // //enumerate frame sizes
-        // ret = enum_frame_sizes(vd, fmt.pixelformat, fmtind);
-        // if (ret != 0)
-        //     fprintf(stderr, "v4L2_CORE: Unable to enumerate frame sizes :%s\n", strerror(ret));
-
+        snprintf(new_stream_format.fourcc, 5, "%c%c%c%c", pix_format & 0xFF,
+                 (pix_format >> 8) & 0xFF, (pix_format >> 16) & 0xFF, (pix_format >> 24) & 0xFF);
+        strncpy(new_stream_format.description, (char *)format_description.description, 31);
+        context->stream_formats.push_back(new_stream_format);
+        //enumerate frame sizes
+        ret = enum_frame_sizes(context, format_description.pixelformat,
+                               context->stream_formats.size() - 1);
+        if (ret != E_OK) {
+            base::LogError() << "Unable to enumerate frame sizes : " << ret;
+        }
         if (dec_support && !ret) {
             valid_formats++; /*the format can be decoded and it has valid frame sizes*/
         }
